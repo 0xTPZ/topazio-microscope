@@ -4,6 +4,8 @@ Aplicativo open source para inspeção de placas eletrônicas com microscópios 
 
 Autor e mantenedor: **0xTPZ** · Topázio Labs / Topazioverse
 
+![Ícone Topázio Microscope](assets/topazio-microscope-256.png)
+
 ## Recursos atuais
 
 - captura por DirectShow ou Media Foundation;

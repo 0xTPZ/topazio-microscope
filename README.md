@@ -17,6 +17,10 @@ Autor e mantenedor: **0xTPZ** · Topázio Labs / Topazioverse
 - congelamento, captura PNG, gravação AVI e tela cheia;
 - ícone Topázio integrado ao aplicativo.
 
+## v0.2
+
+A branch `v0.2` adiciona layout responsivo para telas pequenas, controles em abas, captura assíncrona, resolução/FPS reais, galeria de sessão, anotações editáveis, planejamento visual de trilhas e foco assistido. O planejamento é apenas uma hipótese visual: qualquer reparo deve ser validado por esquema elétrico e multímetro.
+
 O indicador de foco é heurístico. Ele não substitui o ajuste físico da lente e não apresenta medidas em milímetros sem calibração.
 
 ## Instalação para desenvolvimento

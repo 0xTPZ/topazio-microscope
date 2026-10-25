@@ -23,6 +23,10 @@ A branch `v0.2` adiciona layout responsivo para telas pequenas, controles em aba
 
 O indicador de foco é heurístico. Ele não substitui o ajuste físico da lente e não apresenta medidas em milímetros sem calibração.
 
+## Topázio Repair Assistant
+
+A branch `feature/repair-assistant` adiciona a aba **Assistente**, com ROI em coordenadas da imagem, nitidez local, realce de bordas, candidatos geométricos visuais, comparação com overlay ajustável, alinhamento opcional por ORB/RANSAC, registro de medições e exportação de relatórios JSON/Markdown. O processamento é local e offline. Nenhuma análise visual confirma continuidade elétrica ou autoriza um reparo; valide a placa desenergizada com esquema e multímetro. Consulte [docs/repair-assistant.md](docs/repair-assistant.md).
+
 ## Instalação para desenvolvimento
 
 ```powershell

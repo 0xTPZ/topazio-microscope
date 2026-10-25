@@ -58,7 +58,7 @@ def align_images_orb(reference: np.ndarray, moving: np.ndarray, max_features: in
         return AlignmentResult(moving.copy(), False, keypoint_count, message='Pontos locais insuficientes para ORB')
     matcher = cv2.BFMatcher(cv2.NORM_HAMMING)
     pairs = matcher.knnMatch(desc_mov, desc_ref, k=2)
-    good = [first for first, second in pairs if first.distance < 0.75 * second.distance]
+    good = [pair[0] for pair in pairs if len(pair) == 2 and pair[0].distance < 0.75 * pair[1].distance]
     if len(good) < 4:
         return AlignmentResult(moving.copy(), False, keypoint_count, len(good), message='Correspondências insuficientes para RANSAC')
     source = np.float32([key_mov[m.queryIdx].pt for m in good]).reshape(-1, 1, 2)

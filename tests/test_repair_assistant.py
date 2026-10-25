@@ -85,3 +85,42 @@ def test_assistant_interface_initialization_and_analysis():
     assert window.assistant_hypotheses.count() > 0
     window.close()
     app.processEvents()
+
+
+def test_orb_alignment_with_sparse_descriptors():
+    """Imagens sem pontos suficientes devem retornar falha explicativa, não exceção."""
+    from topazio_microscope.vision.alignment import align_images_orb
+    blank = np.zeros((120, 160, 3), dtype=np.uint8)
+    outcome = align_images_orb(blank, blank)
+    assert not outcome.success
+
+
+def test_assistant_report_initialized_and_results_replaced():
+    app = QApplication.instance() or QApplication([])
+    from topazio_microscope.app_v02 import MainWindowV02
+    window = MainWindowV02()
+    assert window.assistant_report is not None
+    frame = sample_frame()
+    window.assistant_set_source(frame, 'fixture.png')
+    window.assistant_analyze()
+    count = window.assistant_observations.count()
+    assert count > 0
+    window.assistant_analyze()
+    assert window.assistant_observations.count() == count
+    window.close()
+    app.processEvents()
+
+
+def test_roi_canvas_repeated_frames_with_selection():
+    """Ao reconstruir a cena, nenhuma referência a item já destruído deve sobreviver."""
+    app = QApplication.instance() or QApplication([])
+    from topazio_microscope.ui.roi_canvas import RoiCanvas
+    view = RoiCanvas()
+    view.set_frame(sample_frame())
+    view.roi = (20, 20, 60, 60)
+    view._draw_selection()
+    view.set_frame(sample_frame())
+    view.clear_selection()
+    assert view.selection_item is None
+    view.close()
+    app.processEvents()

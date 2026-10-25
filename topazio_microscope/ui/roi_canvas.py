@@ -32,7 +32,10 @@ class RoiCanvas(QGraphicsView):
         fmt = QImage.Format_RGB888 if frame.ndim == 3 else QImage.Format_Grayscale8
         image = QImage(rgb.data, rgb.shape[1], rgb.shape[0], rgb.strides[0], fmt).copy()
         previous = self.roi if self.roi and self.roi[0] < frame.shape[1] and self.roi[1] < frame.shape[0] else None
+        # O Qt pode destruir o QGraphicsRectItem durante clear(); descarte as referências.
         self.scene.clear()
+        self.selection_item = None
+        self.image_item = None
         self.image_item = QGraphicsPixmapItem(QPixmap.fromImage(image))
         self.scene.addItem(self.image_item)
         self.scene.setSceneRect(QRectF(0, 0, image.width(), image.height()))

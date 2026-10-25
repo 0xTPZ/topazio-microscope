@@ -1,5 +1,18 @@
 # Changelog
 
+## Próxima — Topázio Repair Assistant
+
+- nova aba Assistente com painel lateral recolhível e visualização de ROI;
+- análise local de nitidez, bordas e possíveis descontinuidades geométricas;
+- comparação com transparência ajustável e alinhamento opcional ORB/RANSAC;
+- observações, hipóteses com incerteza, verificações sugeridas e resultados manuais;
+- captura do melhor frame da ROI e histórico da sessão;
+- exportação de imagem destacada e relatório JSON/Markdown;
+- arquitetura separada em `vision`, `analysis`, `rules`, `models` e `reports`;
+- testes com imagens sintéticas, interface headless e dispositivos simulados.
+
+Limitação: o módulo não confirma rompimentos elétricos, não movimenta lentes e não executa reparos.
+
 ## 0.2.0 — responsividade e inspeção
 
 - painel de captura reorganizado com `QSplitter` e `QScrollArea`;

@@ -6,8 +6,9 @@ from PySide6.QtGui import QImage, QPixmap, QIcon, QColor
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QLabel, QPushButton, QComboBox, QSlider, QVBoxLayout, QHBoxLayout, QGridLayout, QGroupBox, QProgressBar, QTabWidget, QListWidget, QListWidgetItem, QFileDialog, QCheckBox, QLineEdit, QMessageBox, QColorDialog, QSpinBox, QSplitter, QScrollArea, QSizePolicy)
 from .capture.camera import BACKENDS
 from .capture.worker import CameraWorker
+from .capture.recording import VideoRecorder
 from .image.processing import apply_profile, focus_score
-from .inspection.annotations import Annotation, AnnotationCanvas
+from .inspection.annotations import Annotation, AnnotationModel, AnnotationCanvas
 from .inspection.focus import FocusPlot
 from .storage.paths import capture_root, session_root
 from .ui.controls import slider_row
@@ -19,7 +20,7 @@ ICON = RESOURCE_ROOT / 'assets' / 'topazio-microscope.ico'
 class MainWindowV02(QMainWindow):
     def __init__(self):
         super().__init__(); self.setWindowTitle('Topázio Microscope v0.2 — Inspeção eletrônica'); self.setWindowIcon(QIcon(str(ICON))); self.resize(1440, 900)
-        self.thread=None; self.worker=None; self.last=None; self.processed=None; self.writer=None; self.session=session_root(); self.zoom=1.0; self.frozen=False; self.plan_points=[]; self.before_path=None; self.after_path=None
+        self.thread=None; self.worker=None; self.last=None; self.processed=None; self.writer=None; self.record_size=None; self.display_loaded=False; self.session=session_root(); self.zoom=1.0; self.frozen=False; self.plan_points=[]; self.before_path=None; self.after_path=None
         self.tabs=QTabWidget(); self.setCentralWidget(self.tabs); self.build_capture_tab(); self.build_inspection_tab(); self.build_planning_tab(); self.build_focus_tab(); self.apply_style()
 
     def slider(self, low, high, value):
@@ -71,7 +72,7 @@ class MainWindowV02(QMainWindow):
         self.plan_notes=QLineEdit(); self.plan_notes.setPlaceholderText('Notas do planejamento — hipótese visual, validar com esquema/multímetro')
         self.plan_status=QLabel('Nenhum ponto marcado. Os caminhos não confirmam ligação elétrica.')
         self.plan_before=QLabel('Antes'); self.plan_after=QLabel('Depois'); self.plan_before.setAlignment(Qt.AlignCenter); self.plan_after.setAlignment(Qt.AlignCenter)
-        controls=QGridLayout(); controls.setHorizontalSpacing(8); controls.setVerticalSpacing(6); controls.addWidget(self.button('Marcar ponto 1',lambda:self.plan_canvas.set_tool('point')),0,0); controls.addWidget(self.button('Marcar ponto 2',lambda:self.plan_canvas.set_tool('point')),0,1); controls.addWidget(self.button('Desenhar caminho',lambda:self.plan_canvas.set_tool('line')),0,2); controls.addWidget(self.button('Medir pixels',self.measure_plan),1,0); controls.addWidget(self.button('Exportar planejamento',self.export_plan),1,1); controls.addWidget(self.button('Escolher antes',lambda:self.choose_compare('before')),1,2); controls.addWidget(self.button('Escolher depois',lambda:self.choose_compare('after')),2,0,1,3)
+        self.plan_source=QLabel('Imagem: nenhuma'); controls=QGridLayout(); controls.setHorizontalSpacing(8); controls.setVerticalSpacing(6); controls.addWidget(self.button('Usar último frame',self.load_last_into_canvases),0,0); controls.addWidget(self.button('Importar imagem',self.import_planning_image),0,1); controls.addWidget(self.button('Marcar ponto',lambda:self.plan_canvas.set_tool('point')),0,2); controls.addWidget(self.button('Desenhar caminho',lambda:self.plan_canvas.set_tool('line')),1,0); controls.addWidget(self.button('Medir pixels',self.measure_plan),1,1); controls.addWidget(self.button('Exportar planejamento',self.export_plan),1,2); controls.addWidget(self.button('Escolher antes',lambda:self.choose_compare('before')),2,0); controls.addWidget(self.button('Escolher depois',lambda:self.choose_compare('after')),2,1); controls.addWidget(self.plan_source,3,0,1,3)
         compare=QHBoxLayout(); compare.addWidget(self.plan_before); compare.addWidget(self.plan_after); lay=QVBoxLayout(); lay.addLayout(controls); lay.addWidget(self.plan_canvas,1); lay.addWidget(self.plan_notes); lay.addWidget(self.plan_status); lay.addLayout(compare); tab=QWidget(); tab.setLayout(lay); self.tabs.addTab(tab,'Planejamento de Trilhas')
     def build_focus_tab(self):
         self.focus_plot=FocusPlot(); self.focus_info=QLabel('A métrica é local e auxiliar; não é autofoco físico.'); reset=self.button('Redefinir melhor resultado',self.focus_plot.reset); lay=QVBoxLayout(); lay.addWidget(QLabel('Foco assistido — região central do quadro')); lay.addWidget(self.focus_plot); lay.addWidget(self.focus_info); lay.addWidget(reset); tab=QWidget(); tab.setLayout(lay); self.tabs.addTab(tab,'Foco assistido')
@@ -82,21 +83,25 @@ class MainWindowV02(QMainWindow):
         self.profile.setCurrentIndex(0)
     def start_camera(self):
         if self.worker:
-            self.stop_camera(); self.thread.quit(); self.thread.wait(1500); self.thread=None; self.worker=None
+            self.stop_camera()
+            if self.thread:
+                self.thread.quit()
+                if not self.thread.wait(2000): self.status.setText('A câmera ainda está encerrando; tente novamente'); return
+                self.thread.deleteLater()
+            self.thread=None; self.worker=None
         w,h=map(int,self.res.currentText().split('x')); self.thread=QThread(); self.worker=CameraWorker(int(self.camera.currentText()),self.backend.currentText(),w,h); self.worker.moveToThread(self.thread); self.thread.started.connect(self.worker.run); self.worker.frame_ready.connect(self.on_frame); self.worker.metadata.connect(self.on_metadata); self.worker.error.connect(self.on_camera_error); self.worker.finished.connect(self.thread.quit); self.thread.finished.connect(self.camera_finished); self.thread.start(); self.status.setText('Capturando sem bloquear a interface')
     def stop_camera(self):
         if self.worker: self.worker.stop(); self.status.setText('Parando câmera…')
     def camera_finished(self):
-        if self.thread: self.thread.deleteLater(); self.thread=None
-        self.worker=None
+        if self.thread and not self.thread.isRunning(): self.thread.deleteLater(); self.thread=None; self.worker=None
     def on_camera_error(self,msg): self.status.setText(msg)
     def on_metadata(self,w,h,fps): self.actual.setText(f'Resolução real: {w}×{h} · {fps:.1f} FPS')
     def on_frame(self,frame):
         if self.frozen: return
-        self.last=frame.copy(); score=focus_score(frame); self.focus_bar.setValue(score.normalized); self.focus_plot.add_value(score.normalized); self.focus_label.setText(f'Foco {self.focus_plot.trend} · melhor {self.focus_plot.best}%'); self.render(frame)
+        self.last=frame.copy(); self.display_loaded=False; score=focus_score(frame); self.focus_bar.setValue(score.normalized); self.focus_plot.add_value(score.normalized); self.focus_label.setText(f'Foco {self.focus_plot.trend} · melhor {self.focus_plot.best}%'); self.render(frame)
         if self.writer: self.writer.write(self.processed if self.record_filtered.isChecked() else frame)
-    def render(self,frame):
-        h,w=frame.shape[:2]; z=self.zoom; crop=frame[int(h*(1-1/z)/2):int(h*(1+1/z)/2),int(w*(1-1/z)/2):int(w*(1+1/z)/2)] if z>1 else frame; self.processed=apply_profile(crop,self.profile.currentText(),self.brightness.value(),self.contrast.value()/100,self.saturation.value()/100,self.gamma.value()/100,self.sharp.value()/100); rgb=cv2.cvtColor(self.processed,cv2.COLOR_BGR2RGB); q=QImage(rgb.data,rgb.shape[1],rgb.shape[0],rgb.strides[0],QImage.Format_RGB888); self.video.setPixmap(QPixmap.fromImage(q).scaled(self.video.size(),Qt.KeepAspectRatio,Qt.SmoothTransformation))
+    def render(self,frame,reprocess=True):
+        h,w=frame.shape[:2]; z=self.zoom; crop=frame[int(h*(1-1/z)/2):int(h*(1+1/z)/2),int(w*(1-1/z)/2):int(w*(1+1/z)/2)] if reprocess and z>1 else frame; self.processed=apply_profile(crop,self.profile.currentText(),self.brightness.value(),self.contrast.value()/100,self.saturation.value()/100,self.gamma.value()/100,self.sharp.value()/100) if reprocess else crop.copy(); rgb=cv2.cvtColor(self.processed,cv2.COLOR_BGR2RGB); q=QImage(rgb.data,rgb.shape[1],rgb.shape[0],rgb.strides[0],QImage.Format_RGB888); self.video.setPixmap(QPixmap.fromImage(q).scaled(self.video.size(),Qt.KeepAspectRatio,Qt.SmoothTransformation))
     def freeze(self): self.frozen=not self.frozen; self.status.setText('Quadro congelado' if self.frozen else 'Capturando')
     def save_capture(self):
         if self.last is None: self.status.setText('Nenhum frame disponível'); return
@@ -104,14 +109,30 @@ class MainWindowV02(QMainWindow):
     def toggle_record(self):
         if self.writer: self.writer.release(); self.writer=None; self.status.setText('Gravação parada'); return
         if self.last is None: return
-        h,w=self.last.shape[:2]; out=self.session/f'video_{time.strftime("%Y%m%d_%H%M%S")}.avi'; self.writer=cv2.VideoWriter(str(out),cv2.VideoWriter_fourcc(*'MJPG'),20,(w,h)); self.status.setText('Gravando vídeo '+('processado' if self.record_filtered.isChecked() else 'original'))
+        h,w=self.last.shape[:2]; out=self.session/f'video_{time.strftime("%Y%m%d_%H%M%S")}.avi'
+        try: self.writer=VideoRecorder(out,(w,h),20); self.record_size=(w,h)
+        except RuntimeError as exc: self.writer=None; self.status.setText(str(exc)); return
+        self.status.setText('Gravando vídeo '+('processado' if self.record_filtered.isChecked() else 'original'))
     def add_gallery(self,path): item=QListWidgetItem(QIcon(str(path)),path.name); item.setData(Qt.UserRole,str(path)); self.gallery.addItem(item)
-    def open_gallery_item(self,item): self.last=cv2.imread(item.data(Qt.UserRole)); self.render(self.last); self.tabs.setCurrentIndex(1); self.inspect_canvas.set_image(self.to_qimage(self.processed if self.processed is not None else self.last))
+    def open_gallery_item(self,item):
+        frame=cv2.imread(item.data(Qt.UserRole))
+        if frame is None: self.status.setText('Não foi possível abrir a captura'); return
+        self.last=frame; self.display_loaded=True; self.render(frame,reprocess=False); self.load_last_into_canvases(); self.tabs.setCurrentIndex(1)
     def open_capture_folder(self): import os; os.startfile(str(self.session))
     def to_qimage(self,frame): rgb=cv2.cvtColor(frame,cv2.COLOR_BGR2RGB); return QImage(rgb.data,rgb.shape[1],rgb.shape[0],rgb.strides[0],QImage.Format_RGB888).copy()
     def choose_inspect_color(self): color=QColorDialog.getColor(QColor(self.inspect_canvas.color),self); self.inspect_canvas.color=color.name() if color.isValid() else self.inspect_canvas.color
-    def load_last_into_canvas(self):
-        if self.last is not None: self.inspect_canvas.set_image(self.to_qimage(self.processed if self.processed is not None else self.last))
+    def load_last_into_canvases(self):
+        if self.last is not None:
+            image=self.to_qimage(self.processed if self.processed is not None else self.last); self.inspect_canvas.set_image(image); self.set_planning_image(image,'último frame/captura processada')
+    def load_last_into_canvas(self): self.load_last_into_canvases()
+    def import_planning_image(self):
+        path,_=QFileDialog.getOpenFileName(self,'Importar imagem para planejamento',str(capture_root()),'Imagens (*.png *.jpg *.jpeg)')
+        if not path: return
+        frame=cv2.imread(path)
+        if frame is None: self.plan_status.setText('Não foi possível importar a imagem'); return
+        self.last=frame; self.processed=frame.copy(); self.display_loaded=True; self.set_planning_image(self.to_qimage(frame),Path(path).name)
+    def set_planning_image(self,image,label):
+        self.plan_points.clear(); self.plan_canvas.model=AnnotationModel(); self.plan_canvas.set_image(image); self.plan_source.setText(f'Imagem: {label}')
     def inspect_undo(self): self.inspect_canvas.model.undo(); self.inspect_canvas.rebuild()
     def inspect_redo(self): self.inspect_canvas.model.redo(); self.inspect_canvas.rebuild()
     def save_annotations(self): path,_=QFileDialog.getSaveFileName(self,'Salvar anotações',str(self.session/'annotations.json'),'JSON (*.json)'); self.inspect_canvas.model.save(Path(path)) if path else None
@@ -133,7 +154,11 @@ class MainWindowV02(QMainWindow):
         pix=QPixmap(path).scaled(420,220,Qt.KeepAspectRatio,Qt.SmoothTransformation); (self.plan_before if which=='before' else self.plan_after).setPixmap(pix); setattr(self,which+'_path',path)
     def fullscreen(self): self.showFullScreen() if not self.isFullScreen() else self.showNormal()
     def closeEvent(self,event):
-        self.stop_camera(); self.writer.release() if self.writer else None
+        self.stop_camera()
+        if self.thread:
+            self.thread.quit()
+            if not self.thread.wait(2000): event.ignore(); return
+        self.writer.release() if self.writer else None
         if hasattr(self,'splitter'): QSettings('TopazioLabs','TopazioMicroscope').setValue('captureSplitter',self.splitter.saveState())
         event.accept()
 

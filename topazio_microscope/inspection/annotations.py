@@ -26,6 +26,7 @@ class AnnotationCanvas(QGraphicsView):
         super().__init__(); self.scene = QGraphicsScene(self); self.setScene(self.scene); self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse); self.setDragMode(QGraphicsView.NoDrag); self.setBackgroundBrush(QColor('#0d1622')); self.model = AnnotationModel(); self.tool='select'; self.color='#38bdf8'; self.width=2; self.active_layer='Inspeção'; self.text_value='Texto'; self.drawing=False; self.start_point=QPointF(); self.temp=None; self.image_item=None; self.panning=False; self.last_pos=None
     def set_image(self, image: QImage):
         pix=QPixmap.fromImage(image); rect=self.scene.sceneRect(); old_center=self.mapToScene(self.viewport().rect().center()); self.scene.removeItem(self.image_item) if self.image_item else None; self.image_item=QGraphicsPixmapItem(pix); self.image_item.setZValue(-100); self.scene.addItem(self.image_item); self.scene.setSceneRect(pix.rect()); self.centerOn(old_center if rect.isValid() else QPointF(pix.width()/2,pix.height()/2)); self.rebuild()
+    def has_image(self): return self.image_item is not None
     def set_tool(self, tool): self.tool=tool
     def wheelEvent(self, event): self.scale(1.15 if event.angleDelta().y()>0 else 1/1.15, 1.15 if event.angleDelta().y()>0 else 1/1.15)
     def mousePressEvent(self, event):

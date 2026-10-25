@@ -14,5 +14,6 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install -r requirements.txt
-      - run: python -m py_compile run_app.py topazio_microscope/app.py topazio_microscope/image/processing.py
-      - run: python -c "from tests.test_processing import test_focus_and_profiles; test_focus_and_profiles(); print('processing tests passed')"
+      - run: python -m py_compile run_app.py topazio_microscope/app.py topazio_microscope/app_v02.py topazio_microscope/capture/worker.py topazio_microscope/capture/recording.py topazio_microscope/inspection/annotations.py
+      - run: python -c "from tests.test_processing import test_focus_and_profiles; test_focus_and_profiles(); from tests.test_annotations_and_planning import test_annotation_layers_coordinates_and_roundtrip; test_annotation_layers_coordinates_and_roundtrip(); from tests.test_worker_and_recording import test_worker_lifecycle_without_camera,test_recording_dimensions_with_zoom; test_worker_lifecycle_without_camera(); test_recording_dimensions_with_zoom(); print('headless tests passed')"
+      - run: python tests/layout_responsive.py

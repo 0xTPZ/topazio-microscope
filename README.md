@@ -21,6 +21,8 @@ O indicador de foco é heurístico. Ele não substitui o ajuste físico da lente
 
 ## Instalação para desenvolvimento
 
+Veja também o [guia de uso público e limites](docs/USAGE-069.md).
+
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
